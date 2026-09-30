@@ -3,111 +3,92 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Realtà Aumentata - Sales Management</title>
-
-  <!-- A-Frame e MindAR -->
-  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+  <title>Sales Management - Brochure</title>
 
   <style>
     html, body {
       margin: 0;
       padding: 0;
-      overflow: hidden;
       width: 100%;
       height: 100%;
+      overflow: hidden;
+      background: #000;
       -webkit-tap-highlight-color: transparent;
     }
+
+    /* Fotocamera a schermo intero come sfondo */
+    #camera {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+    }
+
+    /* Pagina "in AR" sopra la fotocamera, cliccabile */
+    #ar-link {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;           /* solo l'immagine è cliccabile */
+    }
+
+    #ar-page {
+      max-width: 80vw;
+      max-height: 80vh;
+      width: auto;
+      height: auto;
+      pointer-events: auto;
+      cursor: pointer;
+      border-radius: 6px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+      opacity: 0;
+      transform: perspective(900px) rotateX(6deg) scale(0.9);
+      animation:
+        appear 0.8s ease-out 0.2s forwards,
+        float 4s ease-in-out 1s infinite;
+    }
+
+    @keyframes appear {
+      to { opacity: 1; transform: perspective(900px) rotateX(0deg) scale(1); }
+    }
+
+    @keyframes float {
+      0%, 100% { transform: perspective(900px) translateY(0) scale(1); }
+      50%      { transform: perspective(900px) translateY(-10px) scale(1.01); }
+    }
   </style>
-
-  <script>
-    /*
-     * "tap-to-open": ascolta il tocco su tutta la pagina e controlla con un
-     * raggio 3D se il tocco colpisce il piano AR. Se sì (e il target è
-     * inquadrato) apre subito il link.
-     */
-    AFRAME.registerComponent('tap-to-open', {
-      schema: {
-        url: { type: 'string' },
-        target: { type: 'selector' },
-        plane: { type: 'selector' }
-      },
-
-      init: function () {
-        const self = this;
-        this.found = false;
-        this.opened = false;
-        this.raycaster = new THREE.Raycaster();
-        this.pointer = new THREE.Vector2();
-
-        this.data.target.addEventListener('targetFound', function () { self.found = true; });
-        this.data.target.addEventListener('targetLost', function () { self.found = false; });
-
-        this.onTap = function (e) {
-          if (!self.found || self.opened) return;
-
-          const camera = self.el.camera;
-          if (!camera) return;
-
-          let x = e.clientX, y = e.clientY;
-          if ((x === undefined || y === undefined) && e.changedTouches && e.changedTouches.length) {
-            x = e.changedTouches[0].clientX;
-            y = e.changedTouches[0].clientY;
-          }
-          if (x === undefined || y === undefined) return;
-
-          self.pointer.x = (x / window.innerWidth) * 2 - 1;
-          self.pointer.y = -(y / window.innerHeight) * 2 + 1;
-
-          self.raycaster.setFromCamera(self.pointer, camera);
-          const planeObj = self.data.plane.object3D;
-          planeObj.updateMatrixWorld(true);
-          const hits = self.raycaster.intersectObject(planeObj, true);
-
-          if (hits.length > 0) {
-            self.opened = true;
-            window.location.href = self.data.url;
-          }
-        };
-
-        document.addEventListener('pointerup', this.onTap, true);
-      },
-
-      remove: function () {
-        document.removeEventListener('pointerup', this.onTap, true);
-      }
-    });
-  </script>
 </head>
 <body>
 
-  <a-scene
-    mindar-image="imageTargetSrc: ./targets.mind; uiScanning: yes; uiLoading: yes;"
-    tap-to-open="url: https://online.fliphtml5.com/kyszr/Brochure-completa/; target: #target0; plane: #brochurePlane"
-    vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: false"
-    embedded>
+  <video id="camera" autoplay playsinline muted></video>
 
-    <a-assets>
-      <img id="pag01Image" src="./pag1.png">
-    </a-assets>
+  <a id="ar-link" href="https://online.fliphtml5.com/kyszr/Brochure-completa/">
+    <img id="ar-page" src="./pag1.png" alt="Brochure Sales Management">
+  </a>
 
-    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+  <script>
+    // Avvia la fotocamera posteriore. Se non è disponibile, resta lo sfondo nero
+    // e la pagina è comunque visibile e cliccabile.
+    (function () {
+      const video = document.getElementById('camera');
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
 
-    <a-entity id="target0" mindar-image-target="targetIndex: 0">
-      <!-- Proporzioni identiche al target: 1036 x 1660 -> larghezza 1, altezza 1.602 -->
-      <a-plane
-        id="brochurePlane"
-        src="#pag01Image"
-        position="0 0 0"
-        width="1"
-        height="1.602"
-        rotation="0 0 0"
-        material="transparent: true; shader: flat">
-      </a-plane>
-    </a-entity>
-
-  </a-scene>
+      navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false
+      }).then(function (stream) {
+        video.srcObject = stream;
+        video.play().catch(function () {});
+      }).catch(function (err) {
+        console.warn('Fotocamera non disponibile:', err);
+      });
+    })();
+  </script>
 
 </body>
 </html>
